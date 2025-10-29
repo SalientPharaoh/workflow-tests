@@ -1,0 +1,23 @@
+name: PR Review Listener
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+jobs:
+  capture-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # read-only is enough
+    steps:
+      - name: Save review payloads
+        run: |
+          mkdir out
+          echo '${{ toJson(github.event.review) }}' > out/review.json
+          echo '${{ toJson(github.event.pull_request) }}' > out/pr.json
+          echo '${{ toJson(github) }}' > out/_full_context.json
+
+      - name: Upload context artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-review-context
+          path: out/
