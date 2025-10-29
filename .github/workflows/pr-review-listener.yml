@@ -7,7 +7,8 @@ jobs:
   capture-review:
     runs-on: ubuntu-latest
     permissions:
-      contents: read   # read-only is enough
+      contents: read
+      actions: write
     steps:
       - name: Save review payloads
         run: |
