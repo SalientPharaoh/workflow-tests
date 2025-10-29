@@ -27,7 +27,6 @@ jobs:
             exit 1
           else
             echo "TEST_SECRET is set (value is masked)"
-            echo "Length: ${#${{ secrets.TEST_SECRET }}}"
           fi
           
           if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
@@ -35,7 +34,6 @@ jobs:
             exit 1
           else
             echo "GITHUB_TOKEN is set (value is masked)"
-            echo "Length: ${#${{ secrets.GITHUB_TOKEN }}}"
           fi
           
           echo "Fetching CODEOWNERS file..."
