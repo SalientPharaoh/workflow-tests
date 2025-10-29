@@ -1,0 +1,63 @@
+name: Workflow B — Check Approvals & Secret on Main
+
+on:
+  repository_dispatch:
+    types: [run-approval-check]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+  checks: write
+
+jobs:
+  check-on-main:
+    name: Run logic on main head
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main branch head
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+          fetch-depth: 0
+
+      - name: Show where we are (debug)
+        run: |
+          echo "Checked-out ref: $(git rev-parse --abbrev-ref HEAD)"
+          echo "Main HEAD SHA:  $(git rev-parse HEAD)"
+
+      - name: Read dispatch payload (debug)
+        run: |
+          echo "Payload PR #: ${{ github.event.client_payload.pr_number }}"
+          echo "Review state:  ${{ github.event.client_payload.review_state }}"
+
+      - name: Verify TEST_SECRET is set
+        env:
+          TEST_SECRET: ${{ secrets.TEST_SECRET }}
+        run: |
+          if [ -z "$TEST_SECRET" ]; then
+            echo "❌ TEST_SECRET is NOT set in repository secrets."
+            exit 1
+          else
+            echo "✅ TEST_SECRET is present (value is masked)."
+          fi
+
+      - name: Set status on main HEAD (optional)
+        if: always()
+        run: |
+          STATE="success"
+          DESC="TEST_SECRET present"
+          if [ "${{ job.status }}" != "success" ]; then
+            STATE="failure"
+            DESC="TEST_SECRET missing"
+          fi
+
+          # Set a status on the checked-out main HEAD commit
+          gh api \
+            repos/${{ github.repository }}/statuses/$(git rev-parse HEAD) \
+            -f state="$STATE" \
+            -f context="Workflow B: Secret Check" \
+            -f description="$DESC"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

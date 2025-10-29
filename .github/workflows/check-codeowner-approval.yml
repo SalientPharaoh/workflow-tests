@@ -40,63 +40,106 @@ jobs:
             for (const r of reviews) {
               console.log(`${r.user.login}: ${r.state}`);
             }
+            const fs = require('fs');
+            const core = require('@actions/core');
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const prNumber = pr.number;
             
+            const auth = process.env.AUTH_TOKEN;
+            console.log(`Checking CODEOWNERS for PR #${prNumber} in ${owner}/${repo}`);
 
-          
-      - name: Get PR reviews
-        id: get-reviews
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: |
-          echo "Fetching reviews for PR #$PR_NUMBER..."
-          REVIEWS=$(gh api repos/$REPO/pulls/$PR_NUMBER/reviews --jq '.[] | select(.state == "APPROVED") | .user.login' | paste -sd ',' -)
-          echo "Approved by: $REVIEWS"
-          echo "reviews=$REVIEWS" >> $GITHUB_OUTPUT
-          
-      - name: Check if codeowner approved
-        id: check-approval
-        env:
-          CODEOWNERS: ${{ steps.fetch-codeowners.outputs.codeowners }}
-          REVIEWS: ${{ steps.get-reviews.outputs.reviews }}
-        run: |
-          echo "Codeowners: $CODEOWNERS"
-          echo "Approved by: $REVIEWS"
-          
-          if [ -z "$CODEOWNERS" ]; then
-            echo "No codeowners found"
-            exit 1
-          fi
-          
-          if [ -z "$REVIEWS" ]; then
-            echo "❌ No approvals found for this PR"
-            echo "approved=false" >> $GITHUB_OUTPUT
-            exit 1
-          fi
-          
-          # Convert comma-separated lists to arrays
-          IFS=',' read -ra CODEOWNER_ARRAY <<< "$CODEOWNERS"
-          IFS=',' read -ra REVIEW_ARRAY <<< "$REVIEWS"
-          
-          # Check if any reviewer is a codeowner
-          APPROVED=false
-          for reviewer in "${REVIEW_ARRAY[@]}"; do
-            for codeowner in "${CODEOWNER_ARRAY[@]}"; do
-              if [ "$reviewer" == "$codeowner" ]; then
-                echo "✅ PR approved by codeowner: $reviewer"
-                APPROVED=true
-                break 2
-              fi
-            done
-          done
-          
-          if [ "$APPROVED" = true ]; then
-            echo "approved=true" >> $GITHUB_OUTPUT
-            echo "✅ Codeowner approval requirement met"
-          else
-            echo "approved=false" >> $GITHUB_OUTPUT
-            echo "❌ PR not approved by any codeowner"
-            echo "Required approval from one of: $CODEOWNERS"
-            exit 1
-          fi
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const changedFiles = files.map(f => f.filename);
+            console.log("Changed files:", changedFiles);
+            
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner, repo, pull_number: prNumber, per_page: 100,
+            });
+            const approvedUsers = [
+              ...new Set(reviews.filter(r => r.state === "APPROVED").map(r => r.user.login))
+            ];
+            console.log("Approved reviewers:", approvedUsers);
+
+            let codeownersPath = "";
+            if (fs.existsSync(".github/CODEOWNERS")) codeownersPath = ".github/CODEOWNERS";
+            else if (fs.existsSync("CODEOWNERS")) codeownersPath = "CODEOWNERS";
+            else {
+              core.setFailed("No CODEOWNERS file found.");
+              return;
+            }
+            
+            console.log(`Using CODEOWNERS file: ${codeownersPath}`);
+            const lines = fs.readFileSync(codeownersPath, "utf8")
+              .split("\n")
+              .map(l => l.trim())
+              .filter(l => l && !l.startsWith("#"));
+
+            const rules = lines.map(line => {
+              const [pattern, ...owners] = line.split(/\s+/);
+              return { pattern, owners };
+            });
+
+            let missingApproval = false;
+
+            for (const file of changedFiles) {
+              let matchedOwners = [];
+              for (const { pattern, owners } of rules) {
+                if (file === pattern || file.endsWith(`/${pattern}`) || pattern === "*") {
+                  matchedOwners = owners;
+                }
+              }
+
+              if (matchedOwners.length === 0) {
+                console.log(`File '${file}' has no CODEOWNERS entry - skipping approval check.`);
+                continue;
+              }
+
+              console.log(`File '${file}' owned by: ${matchedOwners.join(" ")}`);
+              let approved = false;
+              
+              for (const ownerRef of matchedOwners) {
+                if (!ownerRef.startsWith("@")) continue;
+                const username = ownerRef.slice(1);
+
+                if (username.includes("/")) {
+                  const [org, team] = username.split("/");
+                  console.log(`Checking team '${team}' members from org '${org}'...`);
+
+                  const res = await fetch(`https://api.github.com/orgs/${org}/teams/${team}/members?per_page=100`, {
+                    headers: { Authorization: `Bearer ${auth}`, Accept: "application/vnd.github+json" }
+                  });
+                  const data = await res.json();
+
+                  if (Array.isArray(data)) {
+                    const members = data.map(m => m.login);
+                    if (members.some(m => approvedUsers.includes(m))) {
+                      approved = true;
+                      break;
+                    }
+                  } else {
+                    console.log(`Could not resolve team '${org}/${team}':`, data);
+                  }
+                } else {
+                  if (approvedUsers.includes(username)) {
+                    approved = true;
+                    break;
+                  }
+                }
+              }
+
+              if (!approved) {
+                console.log(`File '${file}' has no CODEOWNER approval.`);
+                missingApproval = true;
+              } else {
+                console.log(`File '${file}' is approved.`);
+              }
+            }
+
+            if (missingApproval) {
+              core.setFailed("Missing required CODEOWNER approval(s).");
+            } else {
+              console.log("All CODEOWNERS have approved ✅");
+            }
