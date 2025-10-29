@@ -1,17 +1,52 @@
-name: On PR Review → Trigger Workflow B
+name: Test Workflow A - Trigger
 
 on:
   pull_request_review:
     types: [submitted, edited, dismissed]
 
-permissions:
-  contents: read
-
 jobs:
-  call-b:
+  trigger-workflow-b:
+    name: Trigger Workflow B
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+
     steps:
-      - name: Call reusable workflow B
-        uses: ./.github/workflows/workflow-b.yml
+      - name: Exit early for non-approved reviews
+        if: github.event.review.state != 'approved'
+        run: |
+          echo "Skipping - review is not an approval (state: ${{ github.event.review.state }})"
+          exit 0
+
+      - name: Trigger Workflow B
+        uses: actions/github-script@v7
         with:
-          pr_number: ${{ github.event.pull_request.number }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const { owner, repo } = context.repo;
+
+            console.log(`Triggering Workflow B for PR #${prNumber}`);
+            console.log(`Repository: ${owner}/${repo}`);
+            console.log(`Review by: ${context.payload.review.user.login}`);
+            console.log(`Review state: ${context.payload.review.state}`);
+
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner,
+                repo,
+                workflow_id: 'test-workflow-b.yml',
+                ref: context.payload.pull_request.base.ref,
+                inputs: {
+                  pr_number: prNumber.toString(),
+                  reviewer: context.payload.review.user.login,
+                  triggered_by: context.actor
+                }
+              });
+
+              console.log('✓ Successfully triggered Workflow B');
+            } catch (error) {
+              console.error('✗ Failed to trigger Workflow B:', error.message);
+              throw error;
+            }
