@@ -1,0 +1,5 @@
+# CODEOWNERS file for workflow-tests repository
+# These owners will be the default owners for everything in the repo
+# They will be requested for review when someone opens a pull request
+
+* @fivetran-sahilkhirwal
