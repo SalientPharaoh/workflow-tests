@@ -14,42 +14,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/github-script@v8
         with:
-          ref: ${{ github.event.pull_request.base.ref }}
-          
-      - name: Fetch CODEOWNERS file
-        id: fetch-codeowners
-        env:
-          AUTH_TOKEN: ${{ secrets.TEST_SECRET }}
-        run: |
-          if [ -z "${{ secrets.TEST_SECRET }}" ]; then
-            echo "TEST_SECRET is NOT set"
-          else
-            echo "TEST_SECRET is set (value is masked)"
-          fi
-          
-          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
-            echo "GITHUB_TOKEN is NOT set"
-          else
-            echo "GITHUB_TOKEN is set (value is masked)"
-          fi
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
 
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          REPO="${{ github.repository }}"
-          OWNER="${REPO%%/*}"
-
-          const { owner, repo } = context.repo;
-          const prNumber = context.payload.pull_request.number;
-
-          const files = await github.paginate(
+            const files = await github.paginate(
               github.rest.pulls.listFiles,
               { owner, repo, pull_number: prNumber, per_page: 100 }
-          );
-          
-          echo "$files"
-
-          const reviews = await github.paginate(
+            );
+            core.setOutput('files', JSON.stringify(files));
+            
+            const reviews = await github.paginate(
               github.rest.pulls.listReviews,
               {
                 owner: context.repo.owner,
@@ -58,23 +36,9 @@ jobs:
                 per_page: 100,
               }
             );
+            core.setOutput('files', JSON.stringify(reviews));
+            
 
-          cat "$reviews"
-          
-          echo "Fetching CODEOWNERS file..."
-          if [ -f .github/CODEOWNERS ]; then
-            echo "CODEOWNERS file found"
-            cat .github/CODEOWNERS
-            # Extract codeowners (lines starting with * or paths)
-            # Remove comments and empty lines, then extract usernames
-            CODEOWNERS=$(grep -v '^#' .github/CODEOWNERS | grep -v '^$' | grep -oE '@[a-zA-Z0-9_-]+' | tr -d '@' | paste -sd ',' -)
-            echo "codeowners=$CODEOWNERS" >> $GITHUB_OUTPUT
-            echo "Codeowners: $CODEOWNERS"
-          else
-            echo "CODEOWNERS file not found"
-            echo "codeowners=" >> $GITHUB_OUTPUT
-            exit 1
-          fi
           
       - name: Get PR reviews
         id: get-reviews
