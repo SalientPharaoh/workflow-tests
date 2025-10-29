@@ -1,33 +1,59 @@
-name: Workflow B — Check Secret on Main (reusable)
+name: Test Workflow B - Check Secret Access
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       pr_number:
+        description: 'Pull Request Number'
         required: true
-        type: number
+        type: string
+      reviewer:
+        description: 'Reviewer username'
+        required: true
+        type: string
+      triggered_by:
+        description: 'Who triggered this workflow'
+        required: true
+        type: string
 
 jobs:
-  check-on-main:
+  check-secret-access:
+    name: Check PAT Secret Access
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      statuses: write
+      pull-requests: read
 
     steps:
-      - name: Checkout main head
-        uses: actions/checkout@v4
-        with:
-          ref: refs/heads/main
-          fetch-depth: 0
-
-      - name: Verify TEST_SECRET is set
-        env:
-          TEST_SECRET: ${{ secrets.TEST_SECRET }}
+      - name: Display workflow inputs
         run: |
-          if [ -z "$TEST_SECRET" ]; then
-            echo "❌ TEST_SECRET is NOT set."
+          echo "=== Workflow Inputs ==="
+          echo "PR Number: ${{ inputs.pr_number }}"
+          echo "Reviewer: ${{ inputs.reviewer }}"
+          echo "Triggered by: ${{ inputs.triggered_by }}"
+          echo "Current branch: ${{ github.ref }}"
+          echo "Repository: ${{ github.repository }}"
+          echo ""
+
+      - name: Check if PAT secret is available
+        env:
+          PAT_TOKEN: ${{ secrets.TEST_SECRET }}
+        run: |
+          echo "=== Secret Access Check ==="
+          if [ -z "$PAT_TOKEN" ]; then
+            echo "❌ PAT_FOR_CODEOWNER_CHECK is NOT available"
+            echo "Secret is empty or not set"
             exit 1
           else
-            echo "✅ TEST_SECRET is present."
+            echo "✅ PAT_FOR_CODEOWNER_CHECK is AVAILABLE"
+            echo "Secret length: ${#PAT_TOKEN} characters"
+            echo "First 4 characters: ${PAT_TOKEN:0:4}****"
           fi
+          echo ""
+
+      - name: Summary
+        run: |
+          echo "=== Test Summary ==="
+          echo "✓ Workflow B executed successfully"
+          echo "✓ Running on base branch context: ${{ github.ref }}"
+          echo "✓ Secrets are accessible in this workflow"
