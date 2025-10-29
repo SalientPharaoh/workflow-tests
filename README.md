@@ -5,6 +5,7 @@ This repository includes automated workflows for code review management.
 ## CODEOWNERS
 
 The repository uses a CODEOWNERS file (`.github/CODEOWNERS`) to specify code owners who must review and approve pull requests.
+from the fork
 
 Current codeowners:
 - @fivetran-sahilkhirwal
