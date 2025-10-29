@@ -16,8 +16,8 @@ The **Check Codeowner Approval** workflow automatically verifies that pull reque
 ### How it works:
 
 1. **Triggers**: The workflow runs on:
-   - Pull request events (opened, synchronize, reopened, review_requested, submitted)
-   - Pull request review submissions
+   - Pull request events (opened, synchronize, reopened, review_requested)
+   - Pull request review submissions (submitted)
 
 2. **Steps**:
    - Fetches the CODEOWNERS file from the repository
