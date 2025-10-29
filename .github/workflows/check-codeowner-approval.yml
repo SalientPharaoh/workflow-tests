@@ -1,10 +1,8 @@
 name: Check Codeowner Approval
 
 on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, review_requested]
   pull_request_review:
-    types: [submitted]
+    types: [submitted, edited, dismissed]
 
 permissions:
   contents: read
@@ -21,7 +19,25 @@ jobs:
           
       - name: Fetch CODEOWNERS file
         id: fetch-codeowners
+        env:
+          AUTH_TOKEN: ${{ secrets.TEST_SECRET }}
         run: |
+          if [ -z "${{ secrets.TEST_SECRET }}" ]; then
+            echo "TEST_SECRET is NOT set"
+            exit 1
+          else
+            echo "TEST_SECRET is set (value is masked)"
+            echo "Length: ${#${{ secrets.TEST_SECRET }}}"
+          fi
+          
+          if [ -z "${{ secrets.GITHUB_TOKEN }}" ]; then
+            echo "GITHUB_TOKEN is NOT set"
+            exit 1
+          else
+            echo "GITHUB_TOKEN is set (value is masked)"
+            echo "Length: ${#${{ secrets.GITHUB_TOKEN }}}"
+          fi
+          
           echo "Fetching CODEOWNERS file..."
           if [ -f .github/CODEOWNERS ]; then
             echo "CODEOWNERS file found"
