@@ -3,8 +3,7 @@ name: Test Workflow B - Check Secret Access
 on:
   workflow_run:
     workflows: ["Test Workflow A - Store PR Data"]
-    types:
-      - completed
+    types: [completed]
 
 jobs:
   check-secret-access:
