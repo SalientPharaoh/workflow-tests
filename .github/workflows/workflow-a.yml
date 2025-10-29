@@ -1,0 +1,32 @@
+name: On PR Review → Trigger Workflow B
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions:
+  contents: write
+  pull-requests: read
+  checks: write
+  
+jobs:
+  trigger-workflow-b:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log review context
+        run: |
+          echo "Repo: ${{ github.repository }}"
+          echo "PR #: ${{ github.event.pull_request.number }}"
+          echo "Review state: ${{ github.event.review.state }}"
+
+      - name: Dispatch event to run Workflow B in main repo context
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/dispatches" \
+            -f event_type="run-approval-check" \
+            -f client_payload='{"pr_number":${{ github.event.pull_request.number }},"review_state":"${{ github.event.review.state }}"}'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
